@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+
+# Secrets / environment
+.env
+.env.*
+*.pem
+*.key
+
+# Node (in case an API uses it later)
+node_modules/
+npm-debug.log*
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
