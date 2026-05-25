@@ -1,4 +1,4 @@
-# Developing Educate' backend with PostgreSQL
+# Developing Imu-Asusu backend with PostgreSQL
 
 ## Using the PostgreSQL database locally
 
