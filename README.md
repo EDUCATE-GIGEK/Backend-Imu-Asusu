@@ -22,9 +22,9 @@ Connect the postgress app
 - Click the "Connection" tab, fill in "Host name/address" as "localhost", leave the password field empty, and fill in "username" with macOS name
 - To get macOS name, type "whoami" in your terminal and press enter
 - Then save
-- Navigate from ServerNAme --> DatabaseName --> Database --> postgres
+- Navigate from ServerName --> DatabaseName --> Database --> postgres
 - Right click on postgres and select Query Tool
-- You should now be able to write queries fr your database
+- You should now be able to write queries for your database
 
 **VS Code**
 
@@ -37,4 +37,3 @@ Connect the postgress app
 - Right click on postgres --> New Query
 
 TODO: Give claude the permission to access my private repository
-
