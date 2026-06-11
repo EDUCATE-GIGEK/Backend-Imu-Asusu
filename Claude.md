@@ -1,3 +1,5 @@
+I am developing an application to preserve the Nigerian Ikwere-igbo ethnic group's information and culture. I also want to train an AI LLM(voice and text) that is fine-tuned for the Nigerian Igbo community.
+
 I'm making the Backend of a Web Application called the Educate
 
 You can see the description of the project in this github repository: https://github.com/EDUCATE-GIGEK/-m-ta-v1-frontend

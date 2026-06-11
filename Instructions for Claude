@@ -1,0 +1,42 @@
+- Make Tribe and Ethnic group ID Optioal for the religion and language table
+
+Country
+
+- States
+- Local Governments
+- Ethnic groups
+- Tribes
+- Endangered Groups
+- Endangered Languages
+
+State
+
+- Local governments
+- Ethnic groups
+- Tribes
+- Endangered Groups
+- Endagered Languages
+
+Local Governments
+
+- Ethinic groups
+- tribes
+- endangered groups
+- endangered languages
+
+Ethinc groups
+
+- endangered groups
+- Languages
+- Endangered Languages
+- Tribes (Optional)
+
+Tribes
+
+- endangered groups
+- Languages
+- endangered languages
+
+Each of these should have information in the right context
+
+-- The ethnicGroupDescription should have the origin history of the ethnic group
