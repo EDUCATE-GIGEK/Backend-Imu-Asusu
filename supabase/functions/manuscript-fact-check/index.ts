@@ -32,13 +32,13 @@ Do not stretch a source. A source about Ikwerre governance says nothing about Yo
 
 Respond with ONLY a JSON object in this exact shape, no other text:
 {
-  "claims": [{ "excerpt": string, "verdict": "supported" | "contradicted" | "no_evidence", "explanation": string, "sourceIds": number[], "correction": string }]
+  "claims": [{ "excerpt": string, "verdict": "supported" | "contradicted" | "no_evidence", "explanation": string, "sourceIds": string[], "correction": string }]
 }
 
 - "excerpt": a short, VERBATIM substring copied exactly from the draft — same case, punctuation, and spacing — so the caller can locate it. Keep it as short as possible while still being unique, ideally under 15 words. Do not paraphrase.
 - "verdict": one of the three values above.
 - "explanation": one or two sentences. For "supported" and "contradicted", say what the source establishes. For "no_evidence", say plainly that the records do not cover this claim — never speculate about whether it is true.
-- "sourceIds": the id numbers of the SOURCES you relied on. Required for "supported" and "contradicted". Must be an empty array for "no_evidence".
+- "sourceIds": the exact bracketed ids (strings) of the SOURCES you relied on. Required for "supported" and "contradicted". Must be an empty array for "no_evidence".
 - "correction": for "contradicted" only, the exact revised text that should replace "excerpt" in place — a drop-in substitute, faithful to the source, with no commentary. Use an empty string for every other verdict.
 
 Only report claims that are genuinely checkable. Ignore opinions, pedagogical framing, and rhetorical questions. If the draft makes no checkable claims, return an empty array.`;
@@ -57,36 +57,33 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-/** The manuscript's `contexts` jsonb stores ids as strings; Postgres wants numbers. */
-function toIds(value: unknown): number[] {
+/** The manuscript's `contexts` jsonb stores place/people ids as UUID strings. */
+function toIds(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-  return [...new Set(value.map(Number).filter((n) => Number.isInteger(n)))];
+  return [...new Set(value.filter((v) => typeof v === "string" && v.length > 0))];
 }
 
-type HistoryRow = {
-  id: number;
-  category: string | null;
-  subject_name: string | null;
-  subject_description: string | null;
-  entry: { eras?: string; origins?: string } | null;
+type EntryRow = {
+  id: string;
+  entry_type: string | null;
+  title: string | null;
+  summary: string | null;
+  body: string | null;
+  significance: string | null;
 };
 
 /**
- * The ONLY place that knows the shape of a `history` row. Everything downstream
- * (prompt, validation, UI) sees just { id, label, text }, so reshaping the
- * history schema means rewriting this function and nothing else.
+ * The ONLY place that knows the shape of an `entries` row. Everything downstream
+ * (prompt, validation, UI) sees just { id, label, category, text }, so reshaping
+ * the entries schema means rewriting this function and nothing else.
  */
-function historyRowToEvidence(row: HistoryRow) {
-  const parts = [
-    row.subject_description,
-    row.entry?.origins && `Origins: ${row.entry.origins}`,
-    row.entry?.eras && `Eras: ${row.entry.eras}`,
-  ].filter(Boolean);
+function entryToEvidence(row: EntryRow) {
+  const parts = [row.summary, stripHtml(row.body ?? ""), row.significance].filter(Boolean);
 
   return {
     id: row.id,
-    label: row.subject_name ?? `Record ${row.id}`,
-    category: row.category ?? null,
+    label: row.title ?? `Entry ${row.id}`,
+    category: row.entry_type ?? null,
     text: parts.join("\n").slice(0, MAX_CHARS_PER_SOURCE),
   };
 }
@@ -154,56 +151,31 @@ Deno.serve(async (req) => {
     }
   }
 
-  // ── Resolve the manuscript's contexts into history rows ────────────────────
-  const stateIds = toIds(contexts?.states);
-  const lgaIds = toIds(contexts?.localGovernments);
-  const ethnicGroupIds = toIds(contexts?.ethnicGroups);
-  const tribeIds = toIds(contexts?.tribes);
-
-  // `history` has no tribe_id, so a selected tribe contributes evidence through
-  // the ethnic group / state / LGA it belongs to.
-  if (tribeIds.length > 0) {
-    const { data: tribes, error } = await supabase
-      .from("tribes")
-      .select("ethnic_group_id, state_id, local_government_id")
-      .in("id", tribeIds);
-
-    if (error) {
-      return jsonResponse({ error: `Failed to resolve tribes: ${error.message}` }, 502);
-    }
-
-    for (const tribe of tribes ?? []) {
-      if (tribe.ethnic_group_id) ethnicGroupIds.push(tribe.ethnic_group_id);
-      if (tribe.state_id) stateIds.push(tribe.state_id);
-      if (tribe.local_government_id) lgaIds.push(tribe.local_government_id);
-    }
-  }
-
-  const filters = [
-    ethnicGroupIds.length && `ethnic_group_id.in.(${[...new Set(ethnicGroupIds)]})`,
-    stateIds.length && `state_id.in.(${[...new Set(stateIds)]})`,
-    lgaIds.length && `local_government_id.in.(${[...new Set(lgaIds)]})`,
-  ].filter(Boolean) as string[];
+  // ── Resolve the manuscript's contexts into entries ─────────────────────────
+  // contexts = { places: uuid[], peoples: uuid[] }. The RPC returns published
+  // entries anywhere in the subtree of a selected place or people.
+  const placeIds = toIds(contexts?.places);
+  const peopleIds = toIds(contexts?.peoples);
 
   // No contexts selected — nothing to check against. Say so rather than letting
   // the model fall back on its own knowledge of history.
-  if (filters.length === 0) {
+  if (placeIds.length === 0 && peopleIds.length === 0) {
     return jsonResponse({ claims: [], sources: [], sourceCount: 0 });
   }
 
-  const { data: rows, error: historyError } = await supabase
-    .from("history")
-    .select("id, category, subject_name, subject_description, entry")
-    .or(filters.join(","));
+  const { data: rows, error: entriesError } = await supabase.rpc("entries_for_contexts", {
+    place_ids: placeIds,
+    people_ids: peopleIds,
+  });
 
-  if (historyError) {
+  if (entriesError) {
     return jsonResponse(
-      { error: `Failed to load history records: ${historyError.message}` },
+      { error: `Failed to load entries: ${entriesError.message}` },
       502,
     );
   }
 
-  const sources = (rows ?? []).map(historyRowToEvidence).filter((s) => s.text);
+  const sources = ((rows ?? []) as EntryRow[]).map(entryToEvidence).filter((s) => s.text);
 
   if (sources.length === 0) {
     return jsonResponse({ claims: [], sources: [], sourceCount: 0 });
