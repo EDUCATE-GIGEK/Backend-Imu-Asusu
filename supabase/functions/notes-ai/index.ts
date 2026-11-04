@@ -13,7 +13,9 @@
 // json_validate (it emits unescaped newlines) — a leading control line has no such
 // failure mode. Notes are a plain textarea anyway, so plain text is the right shape.
 
-const GROQ_MODEL = Deno.env.get("GROQ_MODEL") ?? "llama-3.3-70b-versatile";
+// Groq retired llama-3.3-70b-versatile on 2026-08-16; openai/gpt-oss-120b is
+// its recommended free-tier replacement. Override with the GROQ_MODEL secret.
+const GROQ_MODEL = Deno.env.get("GROQ_MODEL") ?? "openai/gpt-oss-120b";
 const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
 
 const CORS_HEADERS = {
@@ -115,6 +117,10 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         model: GROQ_MODEL,
+        // gpt-oss is a reasoning model: keep its thinking out of the reply (we only
+        // read message.content) and keep it brief so responses stay fast.
+        include_reasoning: false,
+        reasoning_effort: "low",
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: sections.join("\n\n") },
